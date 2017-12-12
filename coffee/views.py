@@ -2,6 +2,9 @@ from django.shortcuts import render, redirect
 from .forms import UserSignupForm, UserLoginForm, CoffeeForm
 from django.contrib.auth import authenticate, login, logout
 from decimal import Decimal
+from django.http import JsonResponse
+from .models import Bean,Roast,Syrup,Powder, Coffee
+import json
 
 def usersignup(request):
 	context = {}
@@ -73,3 +76,46 @@ def create_coffee(request):
 			return redirect('/')
 	context['form']=form
 	return render(request, 'create_coffee.html', context)
+
+def get_price(request):
+	total_price = Decimal(0)
+
+	bean_id = request.GET.get("bean")
+	if bean_id:
+		total_price += Bean.objects.get(id=bean_id).price
+
+	roast_id = request.GET.get("roast")
+	if roast_id:
+		total_price += Roast.objects.get(id=roast_id).price
+
+	syrups = json.loads(request.GET.get("syrups"))
+	for syrup_id in syrups:
+		total_price += Syrup.objects.get(id=syrup_id).price
+
+	powders = json.loads(request.GET.get("powders"))
+	for powder_id in powders:
+		total_price += Powder.objects.get(id=powder_id).price
+
+	milk = request.GET.get("milk")
+	if milk == 'true':
+		total_price += Decimal(0.100)
+
+	shots = request.GET.get("shots")
+	if shots:
+		total_price += Decimal(int(shots)*0.250)
+
+	return JsonResponse(round(total_price, 3), safe=False)
+
+def coffee_list(request):
+	if request.user.is_anonymous:
+		return redirect("coffee:login")
+	coffee_list = Coffee.objects.filter(creator=request.user)
+	return render(request, 'coffee_list.html', {"coffee_list":coffee_list})
+
+def coffee_detail(request, pk):
+	if request.user.is_anonymous:
+		return redirect("coffee:login")
+	coffee = Coffee.objects.get(pk=pk)
+	if not (request.user.is_staff or request.user==coffee.creator):
+		return redirect('/you/shall/not/pass/')
+	return render(request, 'coffee_detail.html', {"coffee":coffee})
